@@ -1,13 +1,9 @@
+// vite.config.js
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import path from 'path'
 
-// https://vite.dev/config/
+// !!! 将 test_1 改成你的仓库名（保持完全一致） !!!
 export default defineConfig({
   plugins: [react()],
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, 'src')
-    }
-  }
+  base: '/test_1/',   // <- 关键
 })

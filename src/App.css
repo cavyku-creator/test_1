@@ -1,42 +1,17 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+:root { --radius: 12px; }
+
+.app-card {
+  border-radius: var(--radius);
+  transition: box-shadow .2s ease, transform .1s ease;
+}
+.app-card:hover {
+  box-shadow: 0 8px 24px rgba(15,23,42,.06);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
+/* 顶部光晕背景，仅装饰 */
+.app-hero {
+  background:
+    radial-gradient(1200px 400px at 20% -10%, rgba(59,130,246,.08), transparent 70%),
+    radial-gradient(800px 300px at 90% 0%, rgba(99,102,241,.10), transparent 60%);
+  border-radius: 16px;
 }
