@@ -1,121 +1,164 @@
-// src/components/CalendarCheckin.jsx
 import React, { useMemo, useState } from "react";
-import dayjs from "dayjs";
 
-function useLocalStorage(key, initialValue) {
-  const [state, setState] = React.useState(() => {
+/**
+ * 本地打卡日历
+ * - 单击某一天可切换是否打卡
+ * - 统计：本月累计/连续天数/今天是否打卡
+ * - 全部数据保存在 localStorage('calendar.checkin')
+ */
+export default function CalendarCheckin() {
+  const today = new Date();
+  const [ym, setYm] = useState({
+    year: today.getFullYear(),
+    month: today.getMonth(), // 0-11
+  });
+
+  const [data, setData] = useState(() => {
     try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : initialValue;
+      const raw = localStorage.getItem("calendar.checkin");
+      return raw ? JSON.parse(raw) : {}; // {'2025-08-08': true}
     } catch {
-      return initialValue;
+      return {};
     }
   });
-  React.useEffect(() => {
+
+  const save = (next) => {
+    setData(next);
     try {
-      localStorage.setItem(key, JSON.stringify(state));
+      localStorage.setItem("calendar.checkin", JSON.stringify(next));
     } catch {}
-  }, [key, state]);
-  return [state, setState];
-}
+  };
 
-export default function CalendarCheckin() {
-  // 允许左右切月查看历史
-  const [cursor, setCursor] = useState(dayjs());
-  const todayStr = dayjs().format("YYYY-MM-DD");
-  const [days, setDays] = useLocalStorage("checkin_days", []); // ['2025-08-08', ...]
-  const checked = useMemo(() => new Set(days), [days]);
+  const firstDay = new Date(ym.year, ym.month, 1);
+  const startWeekday = firstDay.getDay(); // 0-6
+  const daysInMonth = new Date(ym.year, ym.month + 1, 0).getDate();
+  const cells = useMemo(() => {
+    const arr = [];
+    // 前面空位
+    for (let i = 0; i < startWeekday; i++) arr.push(null);
+    // 当月日期
+    for (let d = 1; d <= daysInMonth; d++) {
+      arr.push(new Date(ym.year, ym.month, d));
+    }
+    // 补齐 6 行
+    while (arr.length % 7 !== 0) arr.push(null);
+    return arr;
+  }, [startWeekday, daysInMonth, ym]);
 
-  function toggle(dateStr) {
-    setDays((arr) => {
-      const s = new Set(arr);
-      s.has(dateStr) ? s.delete(dateStr) : s.add(dateStr);
-      return Array.from(s).sort();
-    });
-  }
+  const iso = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate()
+    ).padStart(2, "0")}`;
+
+  const toggle = (d) => {
+    const k = iso(d);
+    const next = { ...data, [k]: !data[k] };
+    save(next);
+  };
 
   // 统计
-  const total = days.length;
-  const consecutive = useMemo(() => {
-    let cnt = 0;
-    let d = dayjs();
-    while (checked.has(d.format("YYYY-MM-DD"))) {
-      cnt++;
-      d = d.subtract(1, "day");
+  const summaries = useMemo(() => {
+    // 本月累计
+    let monthly = 0;
+    for (let i = 1; i <= daysInMonth; i++) {
+      const k = iso(new Date(ym.year, ym.month, i));
+      if (data[k]) monthly++;
     }
-    return cnt;
-  }, [checked]);
 
-  // 当月计算
-  const startOfMonth = cursor.startOf("month");
-  const endOfMonth = cursor.endOf("month");
-  const startWeekIdx = startOfMonth.day(); // 0-6
-  const totalDays = endOfMonth.date();
+    // 连续
+    let streak = 0;
+    let ptr = new Date(ym.year, ym.month, Math.min(today.getDate(), daysInMonth));
+    // 往前数
+    while (true) {
+      const k = iso(ptr);
+      if (data[k]) {
+        streak++;
+        ptr.setDate(ptr.getDate() - 1);
+      } else break;
+    }
 
-  const cells = [];
-  for (let i = 0; i < startWeekIdx; i++) cells.push(null);
-  for (let d = 1; d <= totalDays; d++) {
-    cells.push(dayjs(startOfMonth).date(d));
-  }
+    const todayKey = iso(today);
+    const checkedToday = !!data[todayKey];
+
+    return { monthly, streak, checkedToday };
+  }, [data, ym, daysInMonth, today]);
+
+  const changeMonth = (delta) => {
+    const d = new Date(ym.year, ym.month + delta, 1);
+    setYm({ year: d.getFullYear(), month: d.getMonth() });
+  };
+
+  const weekNames = ["日", "一", "二", "三", "四", "五", "六"];
 
   return (
-    <div className="w-full">
-      {/* 顶部操作 + 统计条：整体宽度收敛 */}
-      <div className="mx-auto max-w-[880px] flex items-center justify-between mb-2">
-        <div className="text-xs text-slate-600">
-          共打卡：<span className="font-medium">{total}</span> 天；
-          连续：<span className="font-medium">{consecutive}</span> 天；
-          {checked.has(todayStr) ? <span className="text-emerald-600"> 今天已打卡 ✓</span> : <span> 今天未打卡</span>}
+    <div className="grid gap-3">
+      {/* 顶部工具条 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm text-gray-600">
+          <span className="mr-4">本月：{summaries.monthly} 天累计</span>
+          <span className="mr-4">连续：{summaries.streak} 天</span>
+          <span>今天：{summaries.checkedToday ? "已打卡" : "未打卡"}</span>
         </div>
-        <div className="flex gap-2">
+
+        <div className="flex items-center gap-2">
           <button
-            className="px-2 py-1 text-xs rounded border bg-white hover:bg-slate-50"
-            onClick={() => setCursor((d) => d.subtract(1, "month"))}
+            onClick={() => changeMonth(-1)}
+            className="px-3 py-1.5 rounded-lg border hover:bg-gray-50"
           >
             上一月
           </button>
           <button
-            className="px-2 py-1 text-xs rounded border bg-white hover:bg-slate-50"
-            onClick={() => setCursor(dayjs())}
+            onClick={() =>
+              setYm({ year: today.getFullYear(), month: today.getMonth() })
+            }
+            className="px-3 py-1.5 rounded-lg border hover:bg-gray-50"
           >
-            本月
+            今月
           </button>
           <button
-            className="px-2 py-1 text-xs rounded border bg-white hover:bg-slate-50"
-            onClick={() => setCursor((d) => d.add(1, "month"))}
+            onClick={() => changeMonth(1)}
+            className="px-3 py-1.5 rounded-lg border hover:bg-gray-50"
           >
             下一月
           </button>
         </div>
       </div>
 
-      {/* 星期标题（限制整体宽度） */}
-      <div className="mx-auto max-w-[880px] grid grid-cols-7 text-center text-xs text-slate-500 mb-1">
-        {["一", "二", "三", "四", "五", "六", "日"].map((w) => (
-          <div key={w} className="py-1">{w}</div>
+      {/* 表头 */}
+      <div className="grid grid-cols-7 text-center text-sm text-gray-500">
+        {weekNames.map((w) => (
+          <div key={w} className="py-2">
+            {w}
+          </div>
         ))}
       </div>
 
-      {/* 日历格（紧凑、高度固定；容器限制最大宽度） */}
-      <div className="mx-auto max-w-[880px] grid grid-cols-7 gap-1">
-        {cells.map((c, idx) =>
-          c ? (
+      {/* 网格 */}
+      <div className="grid grid-cols-7 gap-1 sm:gap-2">
+        {cells.map((d, i) => {
+          if (!d) return <div key={i} className="aspect-square" />;
+          const k = iso(d);
+          const isToday = k === iso(today);
+          const checked = !!data[k];
+
+          return (
             <button
-              key={idx}
-              onClick={() => toggle(c.format("YYYY-MM-DD"))}
-              className={`h-10 sm:h-11 md:h-12 w-full rounded-lg border text-xs sm:text-sm
-                          flex items-center justify-center select-none transition
-                          ${checked.has(c.format("YYYY-MM-DD"))
-                            ? "bg-emerald-500 text-white border-emerald-500 hover:bg-emerald-600"
-                            : "bg-white hover:bg-slate-50"}`}
-              title={c.format("YYYY-MM-DD")}
+              key={i}
+              onClick={() => toggle(d)}
+              className={`aspect-square rounded-xl border text-sm flex items-center justify-center transition
+                ${
+                  checked
+                    ? "bg-emerald-100 border-emerald-300 text-emerald-700"
+                    : "bg-white hover:bg-gray-50 border-gray-200"
+                }
+                ${isToday ? "ring-2 ring-indigo-400" : ""}
+              `}
+              title={k + (checked ? " · 已打卡" : " · 未打卡")}
             >
-              {c.date()}
+              {d.getDate()}
             </button>
-          ) : (
-            <div key={idx} className="h-10 sm:h-11 md:h-12" />
-          )
-        )}
+          );
+        })}
       </div>
     </div>
   );
